@@ -1,4 +1,11 @@
+<?php
+// Activation de l'affichage des erreurs pour le debug
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
 
+// Pour tests, adresse mail codée en dur. À remplacer par votre logique d'AD.
+$userEmail = "user@example.com";
+?>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -20,11 +27,15 @@
       },
       tsp: {
         email: "tspqc_exfo@kanbanize.com",
-        options: ["Demande de support Production \ Centres de Services", "Demande d'assistance projet"]
+        options: ["Demande de support Production \\ Centres de Services", "Demande d'assistance projet"]
       },
       npi: {
         email: "npiqc_exfo@kanbanize.com",
         options: ["Autres demandes", "Doc de Prod / BOM", "Routing/Équipement/Layout", "Autres demandes"]
+      },
+      master: {
+        email: "",
+        options: []
       }
     };
 
@@ -75,7 +86,6 @@
       if (!form.checkValidity()) { form.reportValidity(); return; }
 
       var name = document.getElementById('name').value;
-      var email = document.getElementById('email').value;
       var title = document.getElementById('employee_title').value;
       var subj = document.getElementById('request_subject').value;
       var svcElt = document.getElementById('service');
@@ -88,7 +98,7 @@
       var urgDet = urg === "yes" ? document.getElementById('urgent_details').value : "";
 
       var recipient = categoryMapping[svc] ? categoryMapping[svc].email : "";
-      if (!recipient) {
+      if (!recipient && svc !== "master") {
         alert("Aucun email défini pour ce service."); return;
       }
 
@@ -98,51 +108,30 @@
 
       // Corps formaté
       var bodyContent = 
-        "=================================
-" +
-        "       Portail des demandes        
-" +
-        "=================================
-
-" +
-        "Nom de l'employé: " + name + "
-" +
-        "Adresse courriel: " + email + "
-" +
-        "Titre d’emploi: " + title + "
-" +
-        "Objet de la demande: " + subj + "
-
-" +
-        "-------------------------------
-" +
-        "Service: " + svcText + "
-";
+        "=================================\n" +
+        "       Portail des demandes        \n" +
+        "=================================\n\n" +
+        "Nom de l'employé: " + name + "\n" +
+        "Titre d’emploi: " + title + "\n" +
+        "Objet de la demande: " + subj + "\n\n" +
+        "-------------------------------\n" +
+        "Service: " + svcText + "\n";
       if (subReq) {
-        bodyContent += "Type de demande: " + subReq + "
-";
+        bodyContent += "Type de demande: " + subReq + "\n";
       }
       bodyContent +=
-        "Système impacté: " + sys + "
-" +
-        "Problème observé: " + obs + "
-
-";
+        "Système impacté: " + sys + "\n" +
+        "Problème observé: " + obs + "\n\n";
       if (urg === "yes") {
         bodyContent += 
-          "***** DEMANDE URGENTE *****
-" +
-          "Détails urgence: " + urgDet + "
-" +
-          "***************************
-";
+          "***** DEMANDE URGENTE *****\n" +
+          "Détails urgence: " + urgDet + "\n" +
+          "***************************\n";
       } else {
-        bodyContent += "Demande urgente: Non
-";
+        bodyContent += "Demande urgente: Non\n";
       }
 
       var body = encodeURIComponent(bodyContent);
-      alert("Votre client de messagerie va s’ouvrir pour envoyer la demande.");
       window.location.href = "mailto:" + recipient + "?subject=" + subject + "&body=" + body;
 
       // Reset et masquage
@@ -187,6 +176,7 @@
               <option value="helpdesk">Demandes TI Helpdesk</option>
               <option value="tsp">Demandes TSP</option>
               <option value="npi">Demandes NPI</option>
+              <option value="master">Données maîtres</option>
             </select>
           </div>
           <!-- Type de demande -->
