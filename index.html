@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Portail des demandes de support</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    .form-container { margin-top: 50px; }
+    .card-header h3 { margin-bottom: 0; }
+  </style>
+  <script>
+    // Mapping des services vers email et types de demande
+    var categoryMapping = {
+      helpdesk: {
+        email: "itsupport_exfo@kanbanize.com",
+        options: ["Déclarer un incident", "Demande d'accès", "Préparation d'événement", "Autres demandes"]
+      },
+      tsp: {
+        email: "tspqc_exfo@kanbanize.com",
+        options: ["Demande de support Production \\ Centres de Services", "Demande d'assistance projet"]
+      },
+      npi: {
+        email: "npiqc_exfo@kanbanize.com",
+        options: ["Autres demandes", "Doc de Prod / BOM", "Routing/Équipement/Layout", "Autres demandes"]
+      },
+      master: {
+        // L'email pour 'master' sera géré côté serveur.
+        // Si 'master' ne doit pas envoyer d'email ou a une logique différente,
+        // cela doit être configuré dans send_email.php.
+        // Pour la logique JS, on peut laisser l'email vide ou le spécifier si nécessaire pour une validation client.
+        email: "master_data_requests@example.com", // Exemple, à adapter dans send_email.php
+        options: []
+      }
+    };
+
+    // Affiche/masque le dropdown de 2ᵉ niveau
+    function updateSubCategory() {
+      var svc = document.getElementById('service').value;
+      var group = document.getElementById('subCategoryGroup');
+      var sel = document.getElementById('subCategory');
+      sel.innerHTML = ""; // Vider les options précédentes
+      if (svc && categoryMapping[svc] && categoryMapping[svc].options.length) {
+        group.style.display = "block";
+        var d = document.createElement("option");
+        d.value = ""; d.text = "Sélectionnez le type de demande";
+        sel.appendChild(d);
+        categoryMapping[svc].options.forEach(function(o) {
+          var opt = document.createElement("option");
+          opt.value = o; opt.text = o;
+          sel.appendChild(opt);
+        });
+      } else {
+        group.style.display = "none";
+        sel.value = ""; // S'assurer qu'aucune sous-catégorie n'est sélectionnée si non visible
+      }
+      updateAdditionalFieldsVisibility(); // Mettre à jour aussi les champs additionnels
+    }
+
+    // Affiche/masque les champs complémentaires
+    function updateAdditionalFieldsVisibility() {
+      var svc = document.getElementById('service').value;
+      var add = document.getElementById('additionalFields');
+      if (!svc || !categoryMapping[svc]) { // S'assurer que svc est valide et existe dans le mapping
+          add.style.display = "none";
+          return;
+      }
+      // Si le service a des options (sous-catégories)
+      if (categoryMapping[svc].options.length) {
+        var sub = document.getElementById('subCategory').value;
+        add.style.display = sub ? "block" : "none";
+      } else { // Si le service n'a pas de sous-catégories (ex: 'master')
+        add.style.display = "block";
+      }
+    }
+
+    // Affiche/masque le détail urgence
+    function updateUrgencyDetailsVisibility() {
+      var u = document.getElementById('urgent').value;
+      document.getElementById('urgentDetailsGroup').style.display = (u === "yes" ? "block" : "none");
+      if (u === "no") {
+        document.getElementById('urgent_details').value = ""; // Vider si non urgent
+      }
+    }
+
+    // Construit et envoie les données du formulaire au script PHP
+    async function sendEmail(e) {
+      e.preventDefault();
+      var form = document.querySelector('form');
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+
+      var userEnteredEmail = document.getElementById('email').value;
+      // Validation basique du format de l'email (côté client)
+      if (!/^\S+@\S+\.\S+$/.test(userEnteredEmail)) {
+          alert("Veuillez entrer une adresse courriel valide.");
+          document.getElementById('email').focus();
+          return;
+      }
+
+      // Validation du domaine de l'email (côté client - optionnel, la validation principale est côté serveur)
+      // Remplacez "votredomaine.com" par les domaines de travail autorisés
+      var allowedDomains = ["example.com", "votreentreprise.com"]; // À CONFIGURER
+      var emailDomain = userEnteredEmail.substring(userEnteredEmail.lastIndexOf("@") + 1).toLowerCase();
+      /*
+      // Décommentez et configurez si vous voulez une vérification de domaine côté client
+      if (!allowedDomains.includes(emailDomain)) {
+          alert("Veuillez utiliser une adresse courriel de travail valide (domaine non autorisé).");
+          document.getElementById('email').focus();
+          return;
+      }
+      */
+
+
+      var svc = document.getElementById('service').value;
+      var recipientDebug = categoryMapping[svc] ? categoryMapping[svc].email : "";
+      if (!recipientDebug && svc !== "master") { // 'master' peut avoir un traitement spécial
+         // Cette alerte est plus pour le debug JS, la logique réelle du destinataire est dans send_email.php
+         // console.warn("Aucun email défini pour ce service dans le JS (la décision finale est côté serveur).");
+      }
+      if (!svc) {
+        alert("Veuillez sélectionner un service.");
+        return;
+      }
+
+
+      var formData = new FormData(form);
+      // Ajout de champs qui pourraient ne pas être inclus si masqués et vides
+      formData.append('service_text', document.getElementById('service').options[document.getElementById('service').selectedIndex].text);
+
+
+      try {
+        const response = await fetch('send_email.php', {
+          method: 'POST',
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+          alert("Demande envoyée avec succès !");
+          form.reset();
+          // Réinitialiser l'affichage des champs conditionnels
+          document.getElementById('subCategoryGroup').style.display = "none";
+          document.getElementById('additionalFields').style.display = "none";
+          document.getElementById('urgentDetailsGroup').style.display = "none";
+          updateSubCategory(); // Pour s'assurer que tout est bien réinitialisé
+        } else {
+          alert("Erreur lors de l'envoi: " + (result.message || "Une erreur inconnue est survenue. Veuillez vérifier les informations saisies ou contacter le support."));
+        }
+      } catch (error) {
+        console.error('Erreur:', error);
+        alert("Une erreur technique est survenue lors de la communication avec le serveur.");
+      }
+    }
+
+    // Appel initial pour s'assurer que l'état est correct au chargement
+    document.addEventListener('DOMContentLoaded', function() {
+        updateSubCategory();
+        updateUrgencyDetailsVisibility();
+    });
+  </script>
+</head>
+<body>
+  <div class="container form-container">
+    <div class="card">
+      <div class="card-header bg-primary text-white">
+        <h3>Portail des demandes de support</h3>
+      </div>
+      <div class="card-body">
+        <form onsubmit="sendEmail(event)">
+          <div class="form-group">
+            <label for="name">Nom de l'employé</label>
+            <input type="text" class="form-control" id="name" name="name" required>
+          </div>
+          <div class="form-group">
+            <label for="email">Adresse courriel de l'employé</label>
+            <input type="email" class="form-control" id="email" name="email" placeholder="nom.prenom@votreentreprise.com" required>
+            <small class="form-text text-muted">Veuillez utiliser votre adresse courriel professionnelle.</small>
+          </div>
+          <div class="form-group">
+            <label for="employee_title">Titre d’emploi</label>
+            <input type="text" class="form-control" id="employee_title" name="employee_title" required>
+          </div>
+          <div class="form-group">
+            <label for="request_subject">Objet de la demande</label>
+            <input type="text" class="form-control" id="request_subject" name="request_subject" required>
+          </div>
+          <div class="form-group">
+            <label for="service">Service</label>
+            <select class="form-control" id="service" name="service" required
+                    onchange="updateSubCategory();">
+              <option value="">Sélectionnez un service</option>
+              <option value="helpdesk">Demandes TI Helpdesk</option>
+              <option value="tsp">Demandes TSP</option>
+              <option value="npi">Demandes NPI</option>
+              <option value="master">Données maîtres</option>
+            </select>
+          </div>
+          <div class="form-group" id="subCategoryGroup" style="display:none;">
+            <label for="subCategory">Type de demande</label>
+            <select class="form-control" id="subCategory" name="subCategory"
+                    onchange="updateAdditionalFieldsVisibility();">
+              </select>
+          </div>
+          <div id="additionalFields" style="display:none;">
+            <div class="form-group">
+              <label for="system_impacted">Système impacté</label>
+              <input type="text" class="form-control" id="system_impacted" name="system_impacted">
+            </div>
+            <div class="form-group">
+              <label for="observed_issue">Problème observé</label>
+              <textarea class="form-control" id="observed_issue" name="observed_issue" rows="4"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="urgent">Est-ce une demande urgente ?</label>
+              <select class="form-control" id="urgent" name="urgent"
+                      onchange="updateUrgencyDetailsVisibility();">
+                <option value="no" selected>Non</option>
+                <option value="yes">Oui</option>
+              </select>
+            </div>
+            <div class="form-group" id="urgentDetailsGroup" style="display:none;">
+              <label for="urgent_details">
+                Veuillez fournir des détails sur les raisons de l'urgence
+              </label>
+              <textarea class="form-control" id="urgent_details" name="urgent_details" rows="3"></textarea>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary">Soumettre la demande</button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
