@@ -27,15 +27,11 @@ $userEmail = "user@example.com";
       },
       tsp: {
         email: "tspqc_exfo@kanbanize.com",
-        options: ["Demande de support Production \\ Centres de Services", "Demande d'assistance projet"]
+        options: ["Demande de support Production \ Centres de Services", "Demande d'assistance projet"]
       },
       npi: {
         email: "npiqc_exfo@kanbanize.com",
         options: ["Autres demandes", "Doc de Prod / BOM", "Routing/Équipement/Layout", "Autres demandes"]
-      },
-      master: {
-        email: "",
-        options: []
       }
     };
 
@@ -86,6 +82,7 @@ $userEmail = "user@example.com";
       if (!form.checkValidity()) { form.reportValidity(); return; }
 
       var name = document.getElementById('name').value;
+      var email = document.getElementById('email').value;
       var title = document.getElementById('employee_title').value;
       var subj = document.getElementById('request_subject').value;
       var svcElt = document.getElementById('service');
@@ -98,7 +95,7 @@ $userEmail = "user@example.com";
       var urgDet = urg === "yes" ? document.getElementById('urgent_details').value : "";
 
       var recipient = categoryMapping[svc] ? categoryMapping[svc].email : "";
-      if (!recipient && svc !== "master") {
+      if (!recipient) {
         alert("Aucun email défini pour ce service."); return;
       }
 
@@ -108,30 +105,51 @@ $userEmail = "user@example.com";
 
       // Corps formaté
       var bodyContent = 
-        "=================================\n" +
-        "       Portail des demandes        \n" +
-        "=================================\n\n" +
-        "Nom de l'employé: " + name + "\n" +
-        "Titre d’emploi: " + title + "\n" +
-        "Objet de la demande: " + subj + "\n\n" +
-        "-------------------------------\n" +
-        "Service: " + svcText + "\n";
+        "=================================
+" +
+        "       Portail des demandes        
+" +
+        "=================================
+
+" +
+        "Nom de l'employé: " + name + "
+" +
+        "Adresse courriel: " + email + "
+" +
+        "Titre d’emploi: " + title + "
+" +
+        "Objet de la demande: " + subj + "
+
+" +
+        "-------------------------------
+" +
+        "Service: " + svcText + "
+";
       if (subReq) {
-        bodyContent += "Type de demande: " + subReq + "\n";
+        bodyContent += "Type de demande: " + subReq + "
+";
       }
       bodyContent +=
-        "Système impacté: " + sys + "\n" +
-        "Problème observé: " + obs + "\n\n";
+        "Système impacté: " + sys + "
+" +
+        "Problème observé: " + obs + "
+
+";
       if (urg === "yes") {
         bodyContent += 
-          "***** DEMANDE URGENTE *****\n" +
-          "Détails urgence: " + urgDet + "\n" +
-          "***************************\n";
+          "***** DEMANDE URGENTE *****
+" +
+          "Détails urgence: " + urgDet + "
+" +
+          "***************************
+";
       } else {
-        bodyContent += "Demande urgente: Non\n";
+        bodyContent += "Demande urgente: Non
+";
       }
 
       var body = encodeURIComponent(bodyContent);
+      alert("Votre client de messagerie va s’ouvrir pour envoyer la demande.");
       window.location.href = "mailto:" + recipient + "?subject=" + subject + "&body=" + body;
 
       // Reset et masquage
@@ -176,7 +194,6 @@ $userEmail = "user@example.com";
               <option value="helpdesk">Demandes TI Helpdesk</option>
               <option value="tsp">Demandes TSP</option>
               <option value="npi">Demandes NPI</option>
-              <option value="master">Données maîtres</option>
             </select>
           </div>
           <!-- Type de demande -->
