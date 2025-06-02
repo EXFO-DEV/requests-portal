@@ -25,12 +25,12 @@
         options: ["Autres demandes", "Doc de Prod / BOM", "Routing/Équipement/Layout", "Autres demandes"]
       },
       master: {
-        // L'email pour 'master' sera géré côté serveur.
-        // Si 'master' ne doit pas envoyer d'email ou a une logique différente,
-        // cela doit être configuré dans send_email.php.
-        // Pour la logique JS, on peut laisser l'email vide ou le spécifier si nécessaire pour une validation client.
         email: "master_data_requests@example.com", // Exemple, à adapter dans send_email.php
         options: []
+      },
+      vmo: { // Nouvelle entrée pour VMO
+        email: "vmo_exfo@kanbanize.com", // Utilisé pour référence côté client
+        options: [] // Pas de sous-catégories pour VMO
       }
     };
 
@@ -40,6 +40,7 @@
       var group = document.getElementById('subCategoryGroup');
       var sel = document.getElementById('subCategory');
       sel.innerHTML = ""; // Vider les options précédentes
+      // Assurez-vous que categoryMapping[svc] existe avant d'accéder à ses propriétés
       if (svc && categoryMapping[svc] && categoryMapping[svc].options.length) {
         group.style.display = "block";
         var d = document.createElement("option");
@@ -61,15 +62,27 @@
     function updateAdditionalFieldsVisibility() {
       var svc = document.getElementById('service').value;
       var add = document.getElementById('additionalFields');
-      if (!svc || !categoryMapping[svc]) { // S'assurer que svc est valide et existe dans le mapping
+      // S'assurer que svc est valide et existe dans le mapping
+      if (!svc || !categoryMapping[svc]) {
           add.style.display = "none";
+          // Réinitialiser les valeurs des champs additionnels s'ils sont masqués
+          document.getElementById('system_impacted').value = '';
+          document.getElementById('observed_issue').value = '';
+          document.getElementById('urgent').value = 'no';
+          updateUrgencyDetailsVisibility(); // Masquer les détails d'urgence aussi
           return;
       }
       // Si le service a des options (sous-catégories)
       if (categoryMapping[svc].options.length) {
         var sub = document.getElementById('subCategory').value;
         add.style.display = sub ? "block" : "none";
-      } else { // Si le service n'a pas de sous-catégories (ex: 'master')
+        if (!sub) { // Si aucune sous-catégorie n'est sélectionnée, vider les champs
+            document.getElementById('system_impacted').value = '';
+            document.getElementById('observed_issue').value = '';
+            document.getElementById('urgent').value = 'no';
+            updateUrgencyDetailsVisibility();
+        }
+      } else { // Si le service n'a pas de sous-catégories (ex: 'master', 'vmo')
         add.style.display = "block";
       }
     }
@@ -93,19 +106,16 @@
       }
 
       var userEnteredEmail = document.getElementById('email').value;
-      // Validation basique du format de l'email (côté client)
       if (!/^\S+@\S+\.\S+$/.test(userEnteredEmail)) {
           alert("Veuillez entrer une adresse courriel valide.");
           document.getElementById('email').focus();
           return;
       }
 
-      // Validation du domaine de l'email (côté client - optionnel, la validation principale est côté serveur)
-      // Remplacez "votredomaine.com" par les domaines de travail autorisés
-      var allowedDomains = ["example.com", "votreentreprise.com"]; // À CONFIGURER
-      var emailDomain = userEnteredEmail.substring(userEnteredEmail.lastIndexOf("@") + 1).toLowerCase();
+      // La validation du domaine de l'email est gérée principalement côté serveur.
+      // var allowedDomains = ["example.com", "votreentreprise.com", "kanbanize.com"];
+      // var emailDomain = userEnteredEmail.substring(userEnteredEmail.lastIndexOf("@") + 1).toLowerCase();
       /*
-      // Décommentez et configurez si vous voulez une vérification de domaine côté client
       if (!allowedDomains.includes(emailDomain)) {
           alert("Veuillez utiliser une adresse courriel de travail valide (domaine non autorisé).");
           document.getElementById('email').focus();
@@ -113,23 +123,14 @@
       }
       */
 
-
       var svc = document.getElementById('service').value;
-      var recipientDebug = categoryMapping[svc] ? categoryMapping[svc].email : "";
-      if (!recipientDebug && svc !== "master") { // 'master' peut avoir un traitement spécial
-         // Cette alerte est plus pour le debug JS, la logique réelle du destinataire est dans send_email.php
-         // console.warn("Aucun email défini pour ce service dans le JS (la décision finale est côté serveur).");
-      }
       if (!svc) {
         alert("Veuillez sélectionner un service.");
         return;
       }
 
-
       var formData = new FormData(form);
-      // Ajout de champs qui pourraient ne pas être inclus si masqués et vides
       formData.append('service_text', document.getElementById('service').options[document.getElementById('service').selectedIndex].text);
-
 
       try {
         const response = await fetch('send_email.php', {
@@ -142,11 +143,10 @@
         if (result.success) {
           alert("Demande envoyée avec succès !");
           form.reset();
-          // Réinitialiser l'affichage des champs conditionnels
           document.getElementById('subCategoryGroup').style.display = "none";
           document.getElementById('additionalFields').style.display = "none";
           document.getElementById('urgentDetailsGroup').style.display = "none";
-          updateSubCategory(); // Pour s'assurer que tout est bien réinitialisé
+          updateSubCategory(); // Pour réinitialiser l'état après soumission
         } else {
           alert("Erreur lors de l'envoi: " + (result.message || "Une erreur inconnue est survenue. Veuillez vérifier les informations saisies ou contacter le support."));
         }
@@ -156,10 +156,8 @@
       }
     }
 
-    // Appel initial pour s'assurer que l'état est correct au chargement
     document.addEventListener('DOMContentLoaded', function() {
-        updateSubCategory();
-        updateUrgencyDetailsVisibility();
+        updateSubCategory(); // Assure que l'état initial est correct
     });
   </script>
 </head>
@@ -197,7 +195,7 @@
               <option value="tsp">Demandes TSP</option>
               <option value="npi">Demandes NPI</option>
               <option value="master">Données maîtres</option>
-            </select>
+              <option value="vmo">Accompagnements VMO</option> </select>
           </div>
           <div class="form-group" id="subCategoryGroup" style="display:none;">
             <label for="subCategory">Type de demande</label>
