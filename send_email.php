@@ -9,30 +9,30 @@ $response = ['success' => false, 'message' => 'Début du traitement.'];
 
 // --- Configuration des domaines de travail autorisés ---
 // IMPORTANT: Configurez ici vos domaines de travail réels.
-$allowed_work_domains = ["example.com", "votreentreprise.com", "kanbanize.com"]; // À CONFIGURER
+$allowed_work_domains = ["example.com", "votreentreprise.com", "kanbanize.com", "exfo.com"]; // À CONFIGURER
 
 // --- Mapping des services vers les emails destinataires (côté serveur) ---
 // Assurez-vous que cela correspond à votre logique de distribution.
 $categoryMappingServer = [
     'helpdesk' => [
-        'email' => "itsupport_exfo@kanbanize.com", // Email du groupe Helpdesk
-        // 'serviceText' est récupéré du POST (formData.append('service_text', ...))
+        'email' => "itsupport_exfo@kanbanize.com",
     ],
     'tsp' => [
-        'email' => "tspqc_exfo@kanbanize.com",      // Email du groupe TSP
+        'email' => "tspqc_exfo@kanbanize.com",
     ],
     'npi' => [
-        'email' => "npiqc_exfo@kanbanize.com",      // Email du groupe NPI
+        'email' => "npiqc_exfo@kanbanize.com",
     ],
     'master' => [
         'email' => "masterdata_group@example.com", // Email pour les Données Maîtres - À CONFIGURER
+    ],
+    'vmo' => [ // Nouvelle entrée pour VMO
+        'email' => "vmo_exfo@kanbanize.com",
     ]
 ];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // --- Récupération et nettoyage basique des données ---
-    // Utiliser htmlspecialchars pour éviter XSS si ces données sont ré-affichées quelque part ou dans un email HTML mal formé.
-    // Pour le corps d'un email texte, le principal est d'éviter l'injection d'en-têtes.
     $name = isset($_POST['name']) ? trim($_POST['name']) : '';
     $user_email_from_form = isset($_POST['email']) ? trim($_POST['email']) : '';
     $employee_title = isset($_POST['employee_title']) ? trim($_POST['employee_title']) : '';
@@ -68,17 +68,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // --- Détermination du destinataire ---
     if (!isset($categoryMappingServer[$service_key]) || empty($categoryMappingServer[$service_key]['email'])) {
-        $response['message'] = "Configuration de service invalide ou destinataire non défini pour le service '" . htmlspecialchars($service_key) . "'.";
-        error_log("Destinataire non trouvé pour service: " . $service_key); // Log pour admin
+        $response['message'] = "Configuration de service invalide ou destinataire non défini pour le service '" . htmlspecialchars($service_text) . "'."; // Utilise service_text pour un message plus clair
+        error_log("Destinataire non trouvé pour service (clé): " . $service_key . ", Texte: " . $service_text); // Log pour admin
         echo json_encode($response);
         exit;
     }
     $recipient_email = $categoryMappingServer[$service_key]['email'];
-
-    // --- Validation des champs conditionnels (si nécessaire) ---
-    // Exemple : Si le service est 'helpdesk' et la sous-catégorie est 'Déclarer un incident', rendre 'system_impacted' et 'observed_issue' obligatoires.
-    // Cette logique dépend de vos règles métier.
-    // Pour l'instant, on se base sur le fait que le JS les rend 'required' quand ils sont visibles.
 
     // --- Construction du sujet et du corps du courriel ---
     $subject_line = $name . ": " . $request_subject_from_form;
@@ -91,13 +86,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $bodyContent .= "Titre d’emploi: " . $employee_title . "\n";
     $bodyContent .= "Objet de la demande: " . $request_subject_from_form . "\n\n";
     $bodyContent .= "-------------------------------\n";
-    $bodyContent .= "Service: " . $service_text . "\n"; // Utilise le texte du service
+    $bodyContent .= "Service: " . $service_text . "\n";
     if (!empty($subCategory)) {
         $bodyContent .= "Type de demande: " . $subCategory . "\n";
     }
 
-    // Inclure les champs additionnels s'ils ont été soumis (le JS contrôle leur visibilité)
-    // On peut vérifier s'ils sont non vides pour les inclure.
+    // Inclure les champs additionnels s'ils ont été soumis et ne sont pas vides.
+    // Le JS contrôle leur visibilité; s'ils sont soumis, ils sont pertinents pour ce type de demande.
     if (!empty($system_impacted)) {
         $bodyContent .= "Système impacté: " . $system_impacted . "\n";
     }
@@ -125,18 +120,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $headers = "From: Portail Demandes <noreply@votredomaine.com>" . "\r\n"; // À CONFIGURER (utiliser une adresse de votre domaine)
     $headers .= "Reply-To: " . $name . " <" . $user_email_from_form . ">" . "\r\n";
     $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
-    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
+    $headers .= "MIME-Version: 1.0\r\n"; // Bonne pratique
+    $headers .= "Content-Type: text/plain; charset=UTF-8\r\n"; // Spécifier l'encodage
 
     // --- Envoi du courriel ---
     // La fonction mail() de PHP est basique. Pour une meilleure fiabilité et plus de fonctionnalités (SMTP, HTML emails),
     // envisagez d'utiliser une bibliothèque comme PHPMailer.
-    if (mail($recipient_email, $subject_line, $bodyContent, $headers)) {
+    if (mail($recipient_email, "=?UTF-8?B?".base64_encode($subject_line)."?=", $bodyContent, $headers)) { // Encodage du sujet pour les caractères spéciaux
         $response['success'] = true;
         $response['message'] = "Demande envoyée avec succès à " . $recipient_email . ".";
     } else {
         $response['message'] = "Échec de l'envoi du courriel. Le serveur n'a pas pu envoyer le message. Contactez l'administrateur.";
         // Logguer l'erreur pour diagnostic côté serveur
-        error_log("Échec de mail() pour : " . $recipient_email . " | Sujet: " . $subject_line . " | From: " . $user_email_from_form);
+        error_log("Échec de mail() pour : " . $recipient_email . " | Sujet: " . $subject_line . " | Headers: " . $headers);
     }
 
 } else {
